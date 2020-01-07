@@ -4,7 +4,7 @@ import styles from "../css/postcard.module.css"
 import { Link } from "gatsby"
 
 const PostCard = ({ post }) => {
-  const { title, date, author, slug } = post.frontmatter
+  const { title, date, slug } = post.frontmatter
   const img = post.frontmatter.image.childImageSharp.fluid
 
   return (
@@ -16,7 +16,7 @@ const PostCard = ({ post }) => {
         <div>
           <h2>{title}</h2>
           <h5>
-            <span>by {author}</span> / <span>{date}</span>
+            <span>{date}</span>
           </h5>
           <p>{post.excerpt}</p>
           <Link to={slug} className={styles.link}>

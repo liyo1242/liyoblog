@@ -3,7 +3,25 @@ import styles from "../css/postTemplate.module.css"
 import { Link, graphql } from "gatsby"
 import Image from "gatsby-image"
 import Layout from "../components/layout"
+import Code from "../components/Code"
 import { MDXRenderer } from "gatsby-plugin-mdx"
+import { MDXProvider } from "@mdx-js/react"
+import { preToCodeBlock } from "mdx-utils"
+
+// components is its own object outside of render so that the references to
+// components are stable
+const components = {
+  pre: preProps => {
+    const props = preToCodeBlock(preProps)
+    // if there's a codeString and some props, we passed the test
+    if (props) {
+      return <Code {...props} />
+    } else {
+      // it's possible to have a pre without a code in it
+      return <pre {...preProps} />
+    }
+  },
+}
 
 const postTemplate = ({ data }) => {
   const { title, date, author, image } = data.mdx.frontmatter
@@ -24,7 +42,9 @@ const postTemplate = ({ data }) => {
         </div>
         <Image fluid={img} />
         <div className={styles.content}>
-          <MDXRenderer>{body}</MDXRenderer>
+          <MDXProvider components={components}>
+            <MDXRenderer>{body}</MDXRenderer>
+          </MDXProvider>
         </div>
       </section>
     </Layout>

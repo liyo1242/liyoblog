@@ -1,0 +1,136 @@
+---
+title: ES6-物件擴展
+slug: es6-object-literal-extension
+image: ./images/image-1.png
+date: 2018-10-18
+author: liyo
+---
+
+# 物件擴展 ( object literal extension )
+
+在 ES6 中，當 **物件屬性名稱** 等於 **變量名稱** 時，是可以允許在物件中直接給變量的，通常使用於物件中的方法
+可以省下關鍵字 `function` 就命名函式
+
+<div className="code">
+
+```javascript
+  const method = {
+    submit: function() {
+      this.$http.post();
+    },
+    handleDayChanged: function(data) {
+      ...
+    },
+    handleMonthChanged: function(data) {
+      ...
+    }
+  }
+```
+
+</div>
+
+<div className="code">
+
+```javascript
+  const ES6method = {
+    submit() {
+      this.$http.post();
+    },
+    handleDayChanged(data) {
+      ...
+    },
+    handleMonthChanged(data) {
+      ...
+    }
+  }
+```
+
+</div>
+
+<br />
+與屬性名稱同樣的變數可以省略，下面兩段程式碼是相等的 :
+
+<div className="code">
+
+```javascript
+function ES6getContent(header, body, footer) {
+  return { header, body, footer }
+}
+```
+
+</div>
+
+
+<div className="code">
+
+```javascript
+function getContent(header, body, footer) {
+  return {
+    header: header,
+    body: body,
+    footer: footer,
+  }
+}
+```
+
+</div>
+
+以function生成紀錄物件:
+
+<div className="code">
+
+```javascript
+function getCar(location, typeName, status) {
+  return {
+    ['location' + location]: true,
+    ['type-' + typeName]() {
+      return status;
+    }
+  }
+}
+let car = getCar('East', 'B', 'need to fix');
+console.log(`${car.locationEast} type-B status ${car['type-B']()}`);
+```
+
+</div>
+
+基本上物件屬性與函式名稱都能使用計算的方式去做動態命名，在宣告屬性名
+稱時，記得不可直接以計算屬性字元( Computed property key )去呼叫，否則
+會 ```SyntaxError```，應該要以 [ ] 去包住
+
+<div className="code">
+
+```javascript
+function getCar(location, typeName, status) {
+  return {
+    ['location' + location]: true,
+    ['type-' + typeName]() {
+      return status;
+    }
+  }
+}
+let v = 'East';
+let car = getCar('East', 'B', 'need to fix');
+console.log(`${car.['location-' + v]} type-B status ${car['type-B']()}`);
+
+// 下面是錯誤示範
+// console.log(`${car.location-East} type-B status ${car['type-B']()}`);
+```
+
+</div>
+
+特別注意的地方 :
+如果 key 的值與變數名稱剛好一樣，就不能直接擴張，會出現`SyntaxError`
+
+<div className="code">
+
+```javascript
+let key = 'value';
+let value = 'gandalf';
+let man = {[key]: value};
+
+// 雖然乍看之下 'value' : value 但卻不能這樣做
+// let man = {[key]};
+```
+
+</div>
