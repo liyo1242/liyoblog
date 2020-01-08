@@ -1,0 +1,285 @@
+---
+ title: generator與yield
+ slug: es6-generator
+ image: ./images/image-1.png
+ date: 2018-11-05
+ author: liyo
+---
+
+# Generator產生器
+
+產生器是ES6迭代器更進階應用, 符合迭代器與可迭代協議( 有在**[Symbol.iterator]**實作方法, 也有回傳next() ), 大多用來處理非同步的問題, 產生器函數是由 function* 所聲明出來的
+
+<div className="code">
+
+  ```javascript 
+  function* generator(i) {
+    yield `hello I'm generator`;
+    yield `hello world`
+  } 
+  ```
+
+</div>
+<br />
+
+在產生器中有個特別的表達式 yield ,這會讓產生器函數停止在目前的地方, 我們在2處放置yield, 並使用next()去開啟這個產生器函數, 可以發現執行到第1個yield就暫停了
+
+---
+
+<div className="code">
+
+  ```javascript 
+  function* generator(i) {
+
+    console.log('start');
+
+    yield `hello I'm generator`;
+
+    console.log('moddle');
+
+    yield `hello world`;
+
+    console.log('end');
+  }
+  let gen = generator();
+
+  gen.next().value; // 'hello I'm generator'
+  ```
+
+</div>
+<br />
+
+單單來看**gen.next()**的內容, 可以發現跟迭代器的回傳值差不多, 因為產生器符合迭代器跟迭代協議, value回傳的就是yield右邊的值
+
+---
+
+<div className="code">
+
+  ```javascript 
+  Object {
+    done: false,
+    value: "hello I'm generator"
+  }
+  ```
+
+</div>
+<br />
+
+.next() 回傳的done值為true, 才算執行完畢, 這裡可以發現如果一個產生器函式要執行完畢, 他需要的next()調用一定會比yield多一個
+
+---
+
+<div className="code">
+
+  ```javascript 
+  let gen = generator();
+
+  gen.next();
+  // object { done: false, value: "hello I'm generator"}
+  gen.next();
+  // object { done: false, value: "hello world"}
+  gen.next();
+  // object { done: true, value: undefined} 產生器結束
+  ```
+
+</div>
+<br />
+有4種狀態可以讓產生器停止
+
+---
+<div className="code">
+
+  ```javascript 
+  function* generator(i) { // yield暫停
+    yield `i+1`;
+  }
+  ```
+
+</div>
+<div className="code">
+
+  ```javascript 
+  function* generator(i) { // 函式內自然跑完 ( 完全停止 )
+    console.log(i);
+  }
+  ```
+
+</div>
+<div className="code">
+
+  ```javascript 
+  function* generator(i) { // Return ( 完全停止 )
+    return i;
+  }
+  ```
+
+</div>
+<div className="code">
+
+  ```javascript 
+  function* generator(i) { // 拋出異常 ( 完全停止 )
+    throw 'some error'
+  }
+  ```
+
+</div>
+<br />
+
+要注意一點的是, 一但return就代表著產生器的終結, 無法重新開始
+
+---
+<div className="code">
+
+  ```javascript 
+  function* generator(i) { 
+    yield i;
+    return i+1;
+    yield i+2;
+  }
+  let gen = generator(0);
+
+  gen.next();
+  // object { done: false, value: 0}
+  gen.next();
+  // object { done: true, value: 1} 產生器到此結束
+  gen.next();
+  // object { done: true, value: undefined} 
+  ```
+
+</div>
+<br />
+產生器還可以拿來迭代傳遞訊息
+
+---
+<div className="code">
+
+  ```javascript 
+  function* generator(i) { 
+    let y = i * (yield);
+    return y;
+  }  
+  ```
+
+</div>
+
+先傳入參數讓x = 10,之後使用第一個next()啟動產生器, 這時候會停在yield那邊, 這時候yield就會發出一個疑問, **該在這裡插入什麼值呢**, 這個疑問會由第2個next來回答
+
+**第一個next()不傳入值是故意的, 只有暫停的yield可以接到next()傳回的值, 第一個next()是用來啟動的, 並沒有任何yield會去等他, 所以產生器會直接丟棄第一個next()傳回的值( 如果有的話啦 )**
+<div className="code">
+
+```javascript
+let gen = generator(10);
+
+  gen.next();
+  // object { done: false, value: undefined}
+  gen.next(2);
+  // object { done: true, value: 20}
+```
+</div>
+也可以不回答 
+<div className="code">
+
+```javascript
+let gen = generator(10);
+
+  gen.next();
+  // object { done: false, value: undefined}
+  gen.next();
+  // object { done: true, value: NaN}
+```
+</div>
+<br />
+多重迭代器 ( 小謎題 )
+
+在使用迭代器來控制產生器時, 對於迭代器會控制的東西, 有時候會搞混, 事實上在每次建構迭代器的同時, 都會隱含的建立一個產生器的實體, 同一個產生器是可以有多個實體的, 可以同時進行, 當然也可以同時做互動
+
+---
+<div className="code">
+
+```javascript
+function *foo() {
+  let x = yield 2;
+  z++;
+  let y = yield (x * z);
+  console.log(x, y, z);
+}
+let z = 1;
+let it1 = foo();
+let it2 = foo();
+
+let value1 = it1.next().value;
+let value2 = it2.next().value;
+
+value1 = it1.next(value2 * 10).value;
+value2 = it2.next(value1 * 10).value;
+
+it1.next( value2 / 2); // 20 , 300 , 3 
+it2.next( value1 / 4); // 200 , 10 , 3
+```
+</div>
+<br />
+
+使用生成器來產生 ID
+
+---
+<div className="code">
+
+```javascript
+function *IdGenerator() {
+  let id = 0;
+  white(true) {
+    yield ++id;
+  }
+}
+
+const idIterator = IdGenerator();
+
+const man1 = { id: idIterator.next().value };
+const man2 = { id: idIterator.next().value };
+const man3 = { id: idIterator.next().value };
+
+assert(man1.id === 1, "first man id is 1")
+assert(man2.id === 2, "second man id is 2")
+assert(man3.id === 3, "thrid man id is 3")
+```
+</div>
+<br />
+
+生成器與遞迴的差別---讀取DOM結構
+
+---
+<div className="code">
+
+```javascript
+function traverseDOM(element, cb) {
+  cb(element);
+  element = element.firstElementChild;
+  while(element) {
+    traverseDOM(element, cb);
+    element = element.nextElementSibling;
+  }
+}
+const subTree = document.getElementById("subTree");
+traverseDOM(subTree, function(element) {
+  assert(element !== null, element.nodeName);
+})
+```
+</div>
+
+不使用回呼的情況下, **生成器產生的值的區塊**與**生成器運用值的區塊**分離開來
+<div className="code">
+
+```javascript
+function* traverseDOM(element) {
+  element = element.firstElementChild;
+  while(element) {
+    yield* traverseDOM(element);
+    element = element.nextElementSibling;
+  }
+}
+const subTree = document.getElementById("subTree");
+for(let element of traverseDOM(subTree)) {
+  assert(element !== null, element.nodeName);
+}
+```
+</div>

@@ -40,7 +40,7 @@ const postTemplate = ({ data }) => {
             <span>by {author}</span> / <span>{date}</span>
           </h4>
         </div>
-        <Image fluid={img} />
+        {/* <Image fluid={img} /> */}
         <div className={styles.content}>
           <MDXProvider components={components}>
             <MDXRenderer>{body}</MDXRenderer>

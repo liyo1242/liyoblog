@@ -1,0 +1,105 @@
+---
+ title: for of 遍歷器
+ slug: for-of
+ image: ./images/image-1.png
+ date: 2018-10-30
+ author: liyo
+---
+
+# For…of 遍歷器
+
+for…of迴圈是為了ES6迭代協議所製作的特殊遍歷器, 只要被迭代的對象有**[Symbol.iterator]**方法, 即可使用for…of來循環它, 而且在js語言中已經有幾個物件類型內建了迭代方法**(Array, String, Map, Set, TypeArray和function中的Arguments)**, 下方的iterable為可迭代的物件
+
+---
+<div className="code">
+
+  ``` 
+  for (variable of iterable) {
+    // statement
+  } 
+  ```
+
+</div>
+<br />
+可被迭代的物件 :
+
+---
+
+<div className="code">
+
+  ```javascript
+
+  const st = "gandalf";
+  const ary = ["Arthur", "JOJO", "Gandalf"];
+  const tary = new Uint8Array([0x00, 0xff]);
+  const map = new Map([[function(){}, 1], ['a', 2], [{a:2}, 3]]);
+  const jojoset = new Set('JOJO');
+
+  ```
+
+</div>
+<br />
+方法中的參數集合同樣也是可以迭代喔~
+
+---
+<div className="code">
+
+  ```javascript
+
+  (function() {
+    for (let argument of arguments) {
+      ...
+    }
+  })(1, 2, 3)
+
+  ```
+
+</div>
+<br />
+Object很遺憾並不是可迭代的,本身並沒有內建@@iterator方法,不過還是可以經由自定義方法來實現,這裡使用到了Generator作為函式架構, 再利用for…in去列舉他的key, 不過最好的方式還是使用object原生Object.entries()方法去做遍歷的動作就好,或是轉成Map可迭代的型態去處理
+
+
+---
+
+<div className="code">
+
+  ```javascript
+
+  let ob = {a: 1, b: 2, c: 3};
+
+  ob[Symbol.iterator] = function *() {
+    for (let key in this) {
+      yield [key, this[key]];
+    }
+  }
+
+  for(let v of ob) {
+    // 可以迭代了!!! ["a", 1] ["b", 2] ["c", 3]
+  }
+
+  ```
+
+</div>
+<br />
+For…of還有一個與他很相似的兄弟 for…in, 兩者迭代的東西有些不同, For…in主要迭代的是可列舉屬性, 所以屬性foo會一起被迭代出來, 而For...of主要為迭代屬性的值, 在某些特殊情況下, For…in所迭代出來的順序有可能不會照著理想中的呈現, 所以官方會建議使用ForEach和for..of來取代它
+
+---
+
+<div className="code">
+
+  ```javascript
+
+  let iterable = ["a", "b", "c"];
+  iterable.foo = 'hello';
+
+  for (let i in iterable) {
+    console.log(i); // 0, 1, 2, "foo"
+  }
+
+  for (let i of iterable) {
+    console.log(i); // "a", "b", "c"
+  }
+
+  ```
+
+</div>
