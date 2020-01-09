@@ -38,3 +38,6 @@ body {
   max-width: 100%;
   margin: 2rem;
 }
+
+.gatsby-resp-image-wrapper {
+}
