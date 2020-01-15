@@ -1,0 +1,415 @@
+---
+title: function的原型鏈
+slug: new-function
+image: ./images/image-1.png
+date: 2020-01-12
+author: liyo
+---
+
+# 🚀 🧐 🎓 💫javascript prototype的筆記
+
+## 🚀 在剛開始需要具備的知識
+1. 在javascript中, 一切的起源為Object, 絕大多數物件都是從Object繼承上去的, 不過我認為並不是"Everything is an object", 
+2. 實例屬性(instance property)跟原型屬性
+3. 知道有原型鏈(Prototype chain)存在, 並知道它的終點是null
+4. javascript是一種函式語言(物件導向OOJS)
+5. **string, number, boolean, null, undefined不是object** ( 這我還在找證明 ), 他們是原始值( primitive value ), 即使你可以訪問到建構器當初繼承的所有方法, EX: 字串是原始值, 但還是可以訪問String.prototype繼承的所有方法
+
+<div className="code">
+
+```javascript
+
+const numninja = "ninja";
+console.log(numninja.__proto__) // 原始String
+console.log(numninja.__proto__.__proto__) // 甚至可以看到最原始的Object
+console.log(numninja.__proto__.__proto__.__proto__) // null 原型鏈終點
+```
+
+</div>
+
+---
+
+## 🧐 首先被當成起源的Object五種特性, 凡是相同者, 皆被視作頭等物件(被當物件來處理, 但實際上還是從Object繼承上去的)
+
+1. 可以藉由實值來建立: 
+
+<div className="code">
+
+```javascript
+
+{} // 建立一個object
+
+```
+
+</div>
+
+2. 可以被指派給變數、陣列資料項或其他物件的屬性:
+
+<div className="code">
+
+```javascript
+
+let ninja = {}; // 指派給變數
+let ninjaArray.push({}); //指派給陣列資料項
+ninja.data = {}; //指派給其他物件的屬性
+
+```
+
+</div>
+
+3. 可以做為引數傳遞給函式:
+
+<div className="code">
+
+```javascript
+
+function ninjaMove(ninja) {
+ ninja.move = true;
+}
+ninjaMove({}) // 新建立的物件做為引數
+
+```
+
+</div>
+
+4. 可以做為函式的回傳值
+
+<div className="code">
+
+```javascript
+
+function ninjaTalk() {
+ return {}; // 回傳新物件
+}
+
+```
+
+</div>
+
+5. 擁有可動態建立和指派的屬性:
+
+<div className="code">
+
+```javascript
+
+let ninja = {};
+ninja.name = "unknown"; // 新增屬性
+
+```
+
+</div>
+
+---
+
+## 🧐 頭等物件-function, 在javascript中擁有物件的所有功能, 幾乎和物件是一樣的 
+
+<br/>
+
+1. 可以藉由實值來建立: 
+
+<div className="code">
+
+```javascript
+
+function ninja() {}
+
+```
+
+</div>
+
+2. 可以被指派給變數、陣列資料項或其他物件的屬性:
+
+<div className="code">
+
+```javascript
+
+let ninja = function() {}; // 指派給變數
+let ninjaArray.push(function() {}); //指派給陣列資料項
+ninja.data = function() {}; //指派給其他物件的屬性
+
+```
+
+</div>
+
+3. 可以做為引數傳遞給函式:
+
+<div className="code">
+
+```javascript
+
+function ninjaMove(ninjaFunction) {
+ ninjaFunction();
+}
+ninjaMove(function() {}) // 新建立的物件做為引數
+
+```
+
+</div>
+
+4. 可以做為函式的回傳值
+
+<div className="code">
+
+```javascript
+
+function ninjaTalk() {
+ return function() {}; // 回傳新物件
+}
+
+```
+
+</div>
+
+5. 擁有可動態建立和指派的屬性:
+
+<div className="code">
+
+```javascript
+
+let ninja = function() {};
+ninja.name = "unknown"; // 新增屬性
+
+```
+
+</div>
+
+---
+
+### 其中在javascript中定義函式的方法可以分為四大類:
+
+<br/>
+
+1. declaration和expression
+
+<div className="code">
+
+```javascript
+
+function ninja() {}; // 函式宣告
+
+let ninjaFunc = function() {}; // 函式表達通常做為引數
+
+```
+
+</div>
+
+2. 箭頭函式(lambda)
+
+<div className="code">
+
+```javascript
+
+let ninjaFunc = myArg => myArg*2; 
+
+```
+
+</div>
+
+3. 生成器(generator)
+
+<div className="code">
+
+```javascript
+
+function *ninjaFunc() {
+ yield 'ninja';
+} 
+
+```
+
+</div>
+
+4. 函式建構式 (new 運算子)
+
+<div className="code">
+
+```javascript
+
+function Ninja() {}; 
+
+let ninja = new Ninja(); // 指派建構器
+
+```
+
+</div>
+
+---
+## 🎓 關於函式運算子 new, new會做5件事
+
+<div className="code">
+
+```javascript
+
+function Ninja() {}; 
+
+let ninja = new Ninja(); 
+
+```
+
+</div>
+
+1. 創建一個空物件給ninja, 純粹用實值建立而已
+
+<div className="code">
+
+```javascript
+
+ninja = {}; 
+
+```
+
+</div>
+
+2. 將ninja(這時是空物件)的[[Prototype]], 瀏覽器上會是 \__proto\__ ,設定為 Ninja.prototype, Ninja.prototype中又會有什麼??, 包含一些經由Ninja.prototype.xxx設定的**原型屬性和constructor以及[[Prototype]]**
+
+<div className="code">
+
+```javascript
+
+ninja.[[Prototype]] = Ninja.prototype 
+// 瀏覽器 ninja.__proto__ = Ninja.prototype
+
+```
+
+</div>
+
+* [[Prototype]]為對原型物件的鏈結
+* 每一個function物件都會自動地帶有prototype這個屬性
+* .prototype中的constructor會指向物件本身(Ninja), 指向實際來源, 依照上述的例子來說, 以下四個其實是相等的
+
+<div className="code">
+
+```javascript
+
+function Ninja() {}; 
+
+let ninja = new Ninja(); 
+
+console.log(ninja.constructor); 
+// 這裡會去下一層([[Prototype]])找constructor, 原本的ninja並沒有constructor這屬性
+console.log(Ninja)
+console.log(ninja.__proto__.constructor);
+console.log(Ninja.prototype.constructor)
+
+```
+
+</div>
+
+
+
+3. 將找到的constructor中的this指向新物件(也就是ninja)
+
+<div className="code">
+
+```javascript
+
+function Ninja() {
+ this.A = true; // 這裡的this在new Ninja()時會指向ninja
+}; 
+
+let ninja = new Ninja(); 
+
+```
+
+</div>
+
+4. 執行constructor函式, 將父元件實例屬性, 在原先的空物件在建立一次
+
+<div className="code">
+
+```javascript
+
+function Ninja() {
+ this.A = true; // 這裡的this在new Ninja()時會指向ninja
+}; 
+
+let ninja = new Ninja();
+
+// 準備一個 空的{}
+// {}.[[Prototype]]被指派
+// 執行 {}.[[Prototype]].constructor
+// 發現 this.A = true, this會指向{}
+// 創建 {}.A = true
+// 準備回傳設定完成的{}給ninja
+
+```
+
+</div>
+
+5. 執行完constructor函式, 回傳設定完成的{}給ninja, 除非constructor **回傳非 string, number, boolean, null, undefined**, 而是回傳一個object( 陣列那些也算是 )
+
+* 之前上面的function都沒寫return , 預設都回傳undefined, 因此都沒問題
+
+<div className="code">
+
+```javascript
+
+function Ninja() {
+ this.A = 1; 
+ return { X: this.A + 10 }
+};
+Ninja.prototype.B = 5; 
+
+let ninja = new Ninja(); 
+
+console.log(ninja) // { X: 11 }
+console.log(ninja.A) // undefined
+console.log(ninja.B) // undefined, 
+// 回傳的{ X: this.A + 10 }中的[[Prototype]]
+// 指向的是javascript原生Object並不是Ninja, 所以原型鏈中找不到B
+
+```
+
+</div>
+
+<div className="code">
+
+```javascript
+
+function Ninja() {
+ this.A = 1; 
+ return function() { return true }
+};
+Ninja.prototype.B = 5; 
+
+let ninja = new Ninja(); 
+
+console.log(ninja) // ƒ () {return true}
+console.log(ninja.__proto__) // ƒ () { [native code] } 原始 function
+console.log(ninja.__proto__.__proto__) // 原始Object
+console.log(ninja.__proto__.__proto__.__proto__) // 終點null
+console.log(ninja.A) // undefined
+console.log(ninja.B) // undefined, 
+// 回傳的 ƒ () {return true} 中的[[Prototype]]
+// 指向的是javascript原生Function並不是Ninja, 所以原型鏈中找不到B
+
+```
+
+</div>
+
+<div className="code">
+
+```javascript
+
+function Ninja() {
+ this.A = 1; 
+ return new Number(100) // new 建構子會回傳object
+};
+Ninja.prototype.B = 5; 
+
+let ninja = new Ninja(); 
+
+console.log(ninja) // Number { 100 }
+console.log(ninja.__proto__) // 原始 Number
+console.log(ninja.__proto__.__proto__) // 原始 Object
+console.log(ninja.__proto__.__proto__.__proto__) // 終點null
+console.log(ninja.A) // undefined
+console.log(ninja.B) // undefined, 
+// 回傳的 Number { 100 } 中的[[Prototype]]
+// 指向的是javascript原生Number並不是Ninja, 所以原型鏈中找不到B
+
+```
+
+</div>
+
+---
