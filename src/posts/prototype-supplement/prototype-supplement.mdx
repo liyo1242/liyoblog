@@ -1,0 +1,231 @@
+---
+title: 原型鏈的補充
+slug: prototype-supplement
+image: ./images/image-1.png
+date: 2020-01-15
+author: liyo
+---
+
+# 🚀 🧐 🎓 💫根據上一篇的function的原型鏈做點補充
+
+## 🚀 上一篇文章有提到new運算子建構一個物件的過程, 這個過程可以看到原本在Ninja中的實例屬性, 在new建構時又被創建一次, 這在某些特殊情形下可能會占用相當的記憶體
+
+<div className="code">
+
+```javascript
+
+function Ninja() {
+ this.A = true; // 這裡的this在new Ninja()時會指向ninja
+}; 
+
+let ninja = new Ninja();
+
+// 準備一個 空的{}
+// {}.[[Prototype]]被指派
+// 執行 {}.[[Prototype]].constructor
+// 發現 this.A = true, this會指向{}
+// 創建 {}.A = true
+// 準備回傳設定完成的{}給ninja
+
+```
+
+</div>
+
+* 每一個實例( ninja們 )都會建立各自版本的屬性B, 這會多占用記憶體( 多建立3次function ), 假設建立了大量的實例會顯得浪費, 雖然 javascript 引擎**有可能**會進行最佳化, 因此只讓 function 在函式原型上出現是不錯的選擇(如 prototype.func)
+
+<div className="code">
+
+```javascript
+
+function Ninja() {
+  this.A = 1; 
+  this.B = function() {return this.A + 10}
+}
+
+Ninja.prototype.func = function() { return this.A + 1 }
+
+let ninja = new Ninja()
+let ninja2 = new Ninja()
+let ninja3 = new Ninja()
+
+// 每個ninja實例有各自獨立的資料屬性A是可以接受的( 版本差異 )
+
+console.log(ninja) // Ninja {A: 1, B: ƒ}
+console.log(ninja.B === Ninja.B) // false 新創建的函式雖然功能一樣, 但多佔用了一處記憶體
+console.log(ninja2.func === Ninja.prototype.func) // true 因為是指向, 並不是真的創建
+console.log(ninja3 === Ninja) // false
+
+```
+
+</div>
+
+## 💫 ( 個人疑問 ) 原型鏈遍歷對效能的影響, 在原型鏈找尋屬性的過程中, 會一層一層向下直到找到目標或抵達終點null, 假設今天有個原型鏈很長的物件, 不確定某個資料實例存不存在自身時, 還需要遍歷整個原型鏈嗎?( 這次只想看看 ninja.D 存不存在ninja裡, 不想往下找下去)
+
+<div className="code">
+
+```javascript
+
+function Ninja() {
+  this.A = 1;
+}
+Ninja.prototype.C = function() {}
+
+let ninja = new Ninja()
+
+console.log(ninja.A) // 找到實例屬性
+console.log(ninja.C) // 找到原型屬性
+console.log(ninja.D) // undefined 找到終點還是沒找到
+
+```
+
+</div>
+
+* 目前只找到Object的原生方法hasOwnProperty, 它是Object.prototype的自有屬性, 可以不遍歷整個原型鏈, 可以發現只找到當前一級而已
+
+<div className="code">
+
+```javascript
+
+function Ninja() {
+  this.A = 1;
+}
+Ninja.prototype.C = function() {}
+
+let ninja = new Ninja()
+
+console.log(ninja.hasOwnProperty('A')) // true
+console.log(ninja.hasOwnProperty('C')) // false
+console.log(ninja.hasOwnProperty('D')) // false
+
+```
+
+</div>
+
+* instanceof 運算子, 這可以檢查Ninja是否出現在ninja的原型鏈上
+
+<div className="code">
+
+```javascript
+
+ninja instanceof Ninja
+
+```
+
+</div>
+
+* 順帶一提, 在尋找屬性時, 先訪問實例屬性( ninja.A ) 再來訪問原型屬性( ninja.prototype.A ), 稱為 " property shadowing "
+
+---
+
+## 🧐 Javascript動態特性, 使原型也具備動態修改的功能, 假設Ninja的原型被一新物件覆寫 ( JS官方不建議這麼做, 這有點像Monkey Patch ), 也會造成一些副作用
+
+<div className="code">
+
+```javascript
+
+function Ninja() {
+  this.A = 1;
+}
+
+let ninja = new Ninja()
+
+// 因為是參照所以建立實例後仍可以被存取到
+Ninja.prototype.C = true
+
+// 此種複寫方法會連同prototype中的constructor一起蓋掉
+Ninja.prototype = {
+  D: "I'm new D"
+}
+
+let ninja2 = new Ninja()
+
+//已經建立的實例依舊參照到舊的Ninja
+console.log(ninja.C) // true
+console.log(ninja.D) // undefined 
+console.log(ninja.constructor) // ƒ Ninja()
+console.log(ninja.__proto__) // {C: true, constructor: ƒ}
+
+// 新建立的ninja2參照到新的Ninja
+console.log(ninja2.C) // undefined
+console.log(ninja2.D) // "I'm new D" 
+console.log(ninja2.constructor) // ƒ Object() 
+console.log(ninja.__proto__) // {D: "I'm new D"} 並沒有constructor
+
+// 再次修改Ninja原型 ( 此時已是新Ninja )
+Ninja.prototype.C = false
+
+console.log(ninja.C) // true 
+console.log(ninja2.C) // false
+
+```
+
+</div>
+
+## 🎓 細部調整屬性, 物件中每個屬性都有個( property descriptor ), 需使用內建Object.defineProperty做調整
+
+* configurable : 當設為true時, 代表 property descriptor 可以被修改, 並且屬性可以被刪除, false時兩個動作都無法進行
+
+* enumerable : 當設為true時, 屬性可以在for-in被列舉出來
+
+* value : 屬性的值
+
+* writable : 當設為true時, 代表可以經由設值改變當前屬性的值
+
+* get : 定義取值函式( getter ), 不能與value, writable一同設定
+
+* set : 定義設值函式( setter ), 不能與value, writable一同設定
+
+<div className="code">
+
+```javascript
+
+let ninja = {}
+
+ninja.name = "Gandalf"
+// 這代表 configurable: true,
+// enumerable: true,
+// value: "Gandalf",
+// writable: true,
+// get: undefined,
+// set: undefined 
+
+```
+
+</div>
+
+## 🧐 以new運算子實現ES6之前的繼承( 沒有Class的時光 ), 使用內建Object.defineProperty調整constructor
+
+<div className="code">
+
+```javascript
+
+function Person() {
+ this.name = "unknown"
+}
+Person.prototype.walk = function() { return "Can Walk" };
+
+function Ninja() {
+  this.weapon = "Frozen fish"
+}
+Ninja.prototype = new Person(); // 這會覆寫掉constructor
+Ninja.prototype.run =  function() { return "Can Run" };
+
+Object.defineProperty(Ninja.prototype, "constructor", {
+ enumerable: false,
+ value: Ninja, 
+ writable: true
+});
+
+let ninja = new Ninja();
+
+console.log(ninja instanceof Ninja) // true
+console.log(ninja instanceof Person) // true
+
+console.log(ninja.walk) // ƒ () {return "Can Walk";}
+console.log(ninja.name) // "unknown"
+console.log(ninja.weapon) // "Frozen fish"
+console.log(ninja.run) // ƒ () {return "Can Run";}
+
+```
+
+</div>
