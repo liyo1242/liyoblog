@@ -7,6 +7,7 @@ import Code from "../components/Code"
 import { MDXRenderer } from "gatsby-plugin-mdx"
 import { MDXProvider } from "@mdx-js/react"
 import { preToCodeBlock } from "mdx-utils"
+import SEO from "../components/seo"
 
 // components is its own object outside of render so that the references to
 // components are stable
@@ -25,11 +26,13 @@ const components = {
 
 const postTemplate = ({ data }) => {
   const { title, date, author, image } = data.mdx.frontmatter
-  const { body } = data.mdx
+
+  const { body, excerpt } = data.mdx
   const img = image.childImageSharp.fluid
 
   return (
     <Layout>
+      <SEO title={title} description={excerpt} />
       <section className={styles.template}>
         <Link to="/" className={styles.link}>
           back to home
@@ -66,6 +69,7 @@ export const query = graphql`
           }
         }
       }
+      excerpt
       body
     }
   }

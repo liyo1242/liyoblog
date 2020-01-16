@@ -5,6 +5,15 @@
  */
 
 module.exports = {
+  siteMetadata: {
+    title: `liyo's blog`,
+    author: `Liyo`,
+    description: `小白作惡日記`,
+    siteUrl: `https://liyoblog-staging.herokuapp.com/`,
+    social: {
+      twitter: `liyo`,
+    },
+  },
   plugins: [
     {
       resolve: `gatsby-source-filesystem`,
@@ -13,6 +22,7 @@ module.exports = {
         path: `${__dirname}/src/posts/`,
       },
     },
+    `gatsby-plugin-react-helmet`,
     {
       resolve: "gatsby-plugin-page-creator",
       options: {
