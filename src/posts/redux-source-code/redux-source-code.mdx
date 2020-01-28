@@ -1,0 +1,597 @@
+---
+title: Redux source code 研究
+slug: redux-source-code
+image: ./images/image-1.png
+date: 2020-01-28
+author: liyo
+---
+
+🚀🚀🚀🚀 這次趁著過年期間把Redux好好的研究了一遍, 特此紀錄
+
+### 1. why use redux
++ 1-1. React local State
++ 1-2. flux
++ 1-3. Redux solve some problem
+
+### 2. redux source code
++ 2-1. combineReducer
++ 2-2. createStore
++ 2-3. applyMiddleware
++ 2-4. compose
++ 2-5. middleware (redux-thunk, redux-promise)
+
+<br />
+
+# 1. why use Redux
+
+### 1-1. React local State
+React中, 父元件可以利用 props 傳值給子元件, 而子元件要傳值給父元件時, 可以使用父元件用 props 傳下來的方法, 修改到父元件本身的 state , 跟 Vue 的雙向綁定不一樣, 在某些情況下, 單單只使用 React 提供的 props 和 state 可能會造成元件彼此之間關係的複雜化, 如果不同父元件底下的子元件, 要共享資料時, 這時共享資料就必須放在原本父元件層級的上一層, 再經由 props 逐級傳下去, 假設中間的父元件本身並不在乎這項資料, 強加上去的 props 就顯得有點多餘, 當底層子元件間共享的資料多起來, 那麼在中間父元件的"表面"就會有太多 props 的產生, 也不能確定到底哪個子元件獲得的資料為最新
+
+<br />
+
+### 1-2. flux
+flux 是當初 fb 所提出的一種新單向資料流想法, 當初是跟MVC做對比, 比起 MVC 來說, flux 的資料流更有嚴謹性, 因為單向的關係所以資料的更改會多了幾層手段, flux 把資料集中起來為Store, 要修改裡面的資料只能使用 Store 所提供的 dispatch 方法, 而畫面渲染則是要訂閱  Store 中感興趣的資料(會使畫面變動的資料), 會有個 callback 來進行畫面的 re-render (可能是更新本身元件的 state 為 store 的特定資料來達到畫面更新), 當 store 中資料變動時則會呼叫這個 callback
+
+<br />
+
+### 1-3. Redux solve some problem
+Redux 為基於 flux 提出的新想法(Reducer + flux = Red + ux), Redux 作者也有提出多項 Redux 的優點:
+* 可預測性的資料更新, 資料更新只能以傳遞 Action 的方式, 透過 store 提供的 dispatch 傳進 Reducer 中
+* 資料的中央管理化
+* Time-travel debugging, 可以回到資料更新前的動作
+* 避免 hot-reload 元件上的資料又重載了 (component更新導致原先 state 不見, 比較像是開發中的問題)
+, 但 Redux 作者 Dan 也有提到, 要不要用 Redux 因專案而異, React 或其他還有提供很多方式 (props/state, React Context, React Hook, GraphQL, Apollo, React Suspense) , 但這又是另一個故事了
+
+<br />
+
+# 2. how to use redux
+
+### 2-3. combineReducer
+
+從原碼中可以看出, Redux 提供的 combineReducer 方法主要是以一個更大的 Reducer 來包住要組合的 Reducer , 以此達成組合的效果, 每個小 Reducer 各自負責自己對應到 store 的資料, 當每個小 Reducer 都把自己的資料處理完, 更新後的新 state tree 就出來了, combineReducer主要是回傳一個function(可以看成是大Reducer), store 裡的資料及 action 會被當參數傳進, 首先會把所有小 Reducer 蒐集起來, 之後依序來更新 state tree , 直到最後一個小 Reducer 完成他的工作
+
+<div className="code">
+
+```javascript
+/**
+ * Turns an object whose values are different reducer functions, into a single
+ * reducer function. It will call every child reducer, and gather their results
+ * into a single state object, whose keys correspond to the keys of the passed
+ * reducer functions.
+ *
+ * @param {Object} reducers An object whose values correspond to different
+ * reducer functions that need to be combined into one. One handy way to obtain
+ * it is to use ES6 `import * as reducers` syntax. The reducers may never return
+ * undefined for any action. Instead, they should return their initial state
+ * if the state passed to them was undefined, and the current state for any
+ * unrecognized action.
+ *
+ * @returns {Function} A reducer function that invokes every reducer inside the
+ * passed object, and builds a state object with the same shape.
+ */
+
+export default function combineReducers(reducers) {
+/** 傳進來的 reducers 通常會裝成 object 
+* 如 {ninjaReducer: ninjaReducer, masterReducer: masterReducer}
+* 因為 key 與參數名一樣, 可以用ES6寫成 {ninjaReducer, masterReducer}
+* finalReducers 主要是確認傳進來的是不是正常的 Reducer
+*/
+  const reducerKeys = Object.keys(reducers)
+  const finalReducers = {} 
+
+// 檢查部分, 順便把所有小 Reducer 蒐集起來 ======
+  for (let i = 0; i < reducerKeys.length; i++) {
+    const key = reducerKeys[i]
+
+    if (process.env.NODE_ENV !== 'production') {
+      if (typeof reducers[key] === 'undefined') {
+        warning(`No reducer provided for key "${key}"`)
+      }
+    }
+
+    if (typeof reducers[key] === 'function') {
+      finalReducers[key] = reducers[key]
+    }
+  }
+  const finalReducerKeys = Object.keys(finalReducers)
+
+// 警告部分 ======
+  let unexpectedKeyCache
+  if (process.env.NODE_ENV !== 'production') {
+    unexpectedKeyCache = {}
+  }
+
+  let shapeAssertionError
+  try {
+    assertReducerShape(finalReducers)
+  } catch (e) {
+    shapeAssertionError = e
+  }
+
+//combination 其實就是個大 Reducer , (state, action) => state
+  return function combination(state = {}, action) {
+    if (shapeAssertionError) {
+      throw shapeAssertionError
+    }
+
+    if (process.env.NODE_ENV !== 'production') {
+      const warningMessage = getUnexpectedStateShapeWarningMessage(state, finalReducers, action, unexpectedKeyCache)
+      if (warningMessage) {
+        warning(warningMessage)
+      }
+    }
+
+    let hasChanged = false
+
+    // 依序來更新 state tree (nextState), 直到最後一個小 Reducer 完成他的工作
+    const nextState = {}
+    for (let i = 0; i < finalReducerKeys.length; i++) {
+      const key = finalReducerKeys[i]
+      const reducer = finalReducers[key]
+	// 每個小 Reducer 各自負責自己對應到 store 的資料
+      const previousStateForKey = state[key]
+      const nextStateForKey = reducer(previousStateForKey, action)
+
+      if (typeof nextStateForKey === 'undefined') {
+        const errorMessage = getUndefinedStateErrorMessage(key, action)
+        throw new Error(errorMessage)
+      }
+	// 檢查這個小 Reducer 有沒有對 state tree 造成變動
+      nextState[key] = nextStateForKey
+      hasChanged = hasChanged || nextStateForKey !== previousStateForKey
+    }
+    return hasChanged ? nextState : state
+  }
+}
+
+```
+
+</div>
+
+### 2-4 createStore
+createStore 為 Redux 的核心, 這個方法會把 state tree 當成私有化, 對外只開放自己的方法(store.dispatch)來修改, 裡面會存著 state tree 與 listener 佇列(資料變動時該做哪些事通知外面的元件), 當然也是提供自己的方法(store.subscribe)來給對外訂閱這個 store
+
+<div className="code">
+
+```javascript
+
+/**
+ * Creates a Redux store that holds the state tree.
+ * The only way to change the data in the store is to call `dispatch()` on it.
+ *
+ * There should only be a single store in your app. To specify how different
+ * parts of the state tree respond to actions, you may combine several reducers
+ * into a single reducer function by using `combineReducers`.
+ *
+ * @param {Function} reducer A function that returns the next state tree, given
+ * the current state tree and the action to handle.
+ *
+ * @param {any} [preloadedState] The initial state. You may optionally specify it
+ * to hydrate the state from the server in universal apps, or to restore a
+ * previously serialized user session.
+ * If you use `combineReducers` to produce the root reducer function, this must be
+ * an object with the same shape as `combineReducers` keys.
+ *
+ * @param {Function} [enhancer] The store enhancer. You may optionally specify it
+ * to enhance the store with third-party capabilities such as middleware,
+ * time travel, persistence, etc. The only store enhancer that ships with Redux
+ * is `applyMiddleware()`.
+ *
+ * @returns {Store} A Redux store that lets you read the state, dispatch actions
+ * and subscribe to changes.
+ */
+
+/** 當同時有好多個 reducer 時, 將 combineReducers 以 reducer 參數傳入是你的最佳選擇, 
+* combineReducers(你的reducer1, 你的reducer2, 你的reducer3)
+*
+* preloadedState 為 state 的初始值, 可以不傳, 中間會自己調整參數位置
+*
+* enhancer 有點像是擴充功能, 當同時有好多個 middleware(擴充功能)時, 
+* 將 applyMiddleware 以 enhancer 參數傳入是你的最佳選擇,
+* applyMiddleware(你的middleware1, 你的middleware2, 你的middleware3)
+*
+* createStore 會回傳一個由 function 組起來的 object , 
+* 包含對資料的取值(getState), 訂閱機制(subscribe), 修改資料(dispatch), 
+* 與比較少用到的開發者功能(replaceReducer, observable)
+*/
+export default function createStore(reducer, preloadedState, enhancer) {
+// createStore 可以跳過 preloadedState 只傳2個參數, 這裡會做調整
+  if (typeof preloadedState === 'function' && typeof enhancer === 'undefined') {
+    enhancer = preloadedState
+    preloadedState = undefined
+  }
+/** 如果有裝擴充功能, 那麼直接去那邊執行, 
+* enhancer 回傳的東西與 createStore 一樣, 
+* 常用的擴充功能目的是為了修改 store 的資料修改機制 dispatch, 
+* 其他的方法都不動(與 createStore 的回傳一樣, 有點偷天換日的感覺), 
+* 因此 createStore 本身也會被傳進去 
+*/
+  if (typeof enhancer !== 'undefined') {
+    if (typeof enhancer !== 'function') {
+      throw new Error('Expected the enhancer to be a function.')
+    }
+    // 開始偷天換日
+    return enhancer(createStore)(reducer, preloadedState)
+  }
+
+  if (typeof reducer !== 'function') {
+    throw new Error('Expected the reducer to be a function.')
+  }
+
+  let currentReducer = reducer
+  let currentState = preloadedState
+  let currentListeners = []
+  let nextListeners = currentListeners
+  let isDispatching = false
+
+/** nextListeners 有點像是 currentListeners 的緩存 Buffer, 
+* 執行完舊的 listen 佇列才會同步進 currentListeners ,
+* 這裡只是在確保每次修改前一定是全新的 object ,而不是舊的參照
+*/
+  function ensureCanMutateNextListeners() {
+    if (nextListeners === currentListeners) {
+      nextListeners = currentListeners.slice()
+    }
+  }
+
+  /**
+   * Reads the state tree managed by the store.
+   *
+   * @returns {any} The current state tree of your application.
+   */
+  // Store 的 Getter
+  function getState() {
+    return currentState
+  }
+
+  /**
+   * Adds a change listener. It will be called any time an action is dispatched,
+   * and some part of the state tree may potentially have changed. You may then
+   * call `getState()` to read the current state tree inside the callback.
+   *
+   * You may call `dispatch()` from a change listener, with the following
+   * caveats:
+   *
+   * 1. The subscriptions are snapshotted just before every `dispatch()` call.
+   * If you subscribe or unsubscribe while the listeners are being invoked, this
+   * will not have any effect on the `dispatch()` that is currently in progress.
+   * However, the next `dispatch()` call, whether nested or not, will use a more
+   * recent snapshot of the subscription list.
+   *
+   * 2. The listener should not expect to see all state changes, as the state
+   * might have been updated multiple times during a nested `dispatch()` before
+   * the listener is called. It is, however, guaranteed that all subscribers
+   * registered before the `dispatch()` started will be called with the latest
+   * state by the time it exits.
+   *
+   * @param {Function} listener A callback to be invoked on every dispatch.
+   * @returns {Function} A function to remove this change listener.
+   */
+  
+  /**
+  * Store 的訂閱機制, 這裡的準備的 listener 主要是在 dispatch 那邊變動完資料後執行, 
+  * 回傳取消訂閱的方法, 有點像下載軟體都會附贈的 uninstall 一樣
+  */
+  function subscribe(listener) {
+    if (typeof listener !== 'function') {
+      throw new Error('Expected listener to be a function.')
+    }
+
+    let isSubscribed = true
+    // 修改前確保新數組
+    ensureCanMutateNextListeners()
+    nextListeners.push(listener)
+
+    return function unsubscribe() {
+      if (!isSubscribed) {
+        return
+      }
+
+      isSubscribed = false
+      // 修改前確保新數組
+      ensureCanMutateNextListeners()
+      // 取消訂閱就從 listener 佇列中清除
+      const index = nextListeners.indexOf(listener)
+      nextListeners.splice(index, 1)
+    }
+  }
+
+  /**
+   * Dispatches an action. It is the only way to trigger a state change.
+   *
+   * The `reducer` function, used to create the store, will be called with the
+   * current state tree and the given `action`. Its return value will
+   * be considered the **next** state of the tree, and the change listeners
+   * will be notified.
+   *
+   * The base implementation only supports plain object actions. If you want to
+   * dispatch a Promise, an Observable, a thunk, or something else, you need to
+   * wrap your store creating function into the corresponding middleware. For
+   * example, see the documentation for the `redux-thunk` package. Even the
+   * middleware will eventually dispatch plain object actions using this method.
+   *
+   * @param {Object} action A plain object representing “what changed”. It is
+   * a good idea to keep actions serializable so you can record and replay user
+   * sessions, or use the time travelling `redux-devtools`. An action must have
+   * a `type` property which may not be `undefined`. It is a good idea to use
+   * string constants for action types.
+   *
+   * @returns {Object} For convenience, the same action object you dispatched.
+   *
+   * Note that, if you use a custom middleware, it may wrap `dispatch()` to
+   * return something else (for example, a Promise you can await).
+   */
+  /*
+  * dispatch 為擴充功能(enhance)改造的對象, 像是redux-thunk, redux-promise這些的,
+  * 他們會"延後"原生 dispatch 執行的時間點一點點,
+  * 這些 middleware 會用 Redux 提供的 compose 方法,
+  * 與原生 dispatch 作融合, 如 ninjaMiddleware(hunterMiddleware(原生dispatch()))
+  */
+  function dispatch(action) {
+    if (!isPlainObject(action)) {
+      throw new Error(
+        'Actions must be plain objects. ' +
+        'Use custom middleware for async actions.'
+      )
+    }
+
+    if (typeof action.type === 'undefined') {
+      throw new Error(
+        'Actions may not have an undefined "type" property. ' +
+        'Have you misspelled a constant?'
+      )
+    }
+
+    if (isDispatching) {
+      throw new Error('Reducers may not dispatch actions.')
+    }
+// 傳進大 Reducer 處理資料, dispatch 本身不負責處理 state, 只是在每次"可能"修改了 state 後, 把所有 listen 叫出來執行一遍
+    try {
+      isDispatching = true
+      currentState = currentReducer(currentState, action)
+    } finally {
+      isDispatching = false
+    }
+/* 在宣告時順便同步 nextListeners 到 currentListeners 裡面
+* 之後全部 listener 依序執行,
+* listener 裡 callback 通常會把 store.getState 與 React.setState 綁一起,
+* 效能應該是不會差很多, 雖然可能有些 listener 根本不在乎此次修改
+*/
+    const listeners = currentListeners = nextListeners
+    for (let i = 0; i < listeners.length; i++) {
+      const listener = listeners[i]
+      listener()
+    }
+
+    return action
+  }
+
+  // 下面的方法大多在開發時才會用到 ======
+
+  /**
+   * Replaces the reducer currently used by the store to calculate the state.
+   *
+   * You might need this if your app implements code splitting and you want to
+   * load some of the reducers dynamically. You might also need this if you
+   * implement a hot reloading mechanism for Redux.
+   *
+   * @param {Function} nextReducer The reducer for the store to use instead.
+   * @returns {void}
+   */
+  function replaceReducer(nextReducer) {
+    if (typeof nextReducer !== 'function') {
+      throw new Error('Expected the nextReducer to be a function.')
+    }
+
+    currentReducer = nextReducer
+    dispatch({ type: ActionTypes.INIT })
+  }
+
+  /**
+   * Interoperability point for observable/reactive libraries.
+   * @returns {observable} A minimal observable of state changes.
+   * For more information, see the observable proposal:
+   * https://github.com/tc39/proposal-observable
+   */
+  function observable() {
+    const outerSubscribe = subscribe
+    return {
+      /**
+       * The minimal observable subscription method.
+       * @param {Object} observer Any object that can be used as an observer.
+       * The observer object should have a `next` method.
+       * @returns {subscription} An object with an `unsubscribe` method that can
+       * be used to unsubscribe the observable from the store, and prevent further
+       * emission of values from the observable.
+       */
+      subscribe(observer) {
+        if (typeof observer !== 'object') {
+          throw new TypeError('Expected the observer to be an object.')
+        }
+
+        function observeState() {
+          if (observer.next) {
+            observer.next(getState())
+          }
+        }
+
+        observeState()
+        const unsubscribe = outerSubscribe(observeState)
+        return { unsubscribe }
+      },
+
+      [$$observable]() {
+        return this
+      }
+    }
+  }
+
+  // When a store is created, an "INIT" action is dispatched so that every
+  // reducer returns their initial state. This effectively populates
+  // the initial state tree.
+  dispatch({ type: ActionTypes.INIT })
+
+  return {
+    dispatch,
+    subscribe,
+    getState,
+    replaceReducer,
+    [$$observable]: observable
+  }
+}
+
+```
+
+</div>
+
+### 2-5. applyMiddleware
+applyMiddleware 為基於 createStore 之上做的修改, 可以從 applyMiddleware 的回傳看出除了 dispatch 以外的功能都跟原先 createStore 提供的一樣, 經過 middleware 層的 dispatch 將能夠接受不同型態的 action 參數
+
+<div className="code">
+
+```javascript
+/**
+ * Creates a store enhancer that applies middleware to the dispatch method
+ * of the Redux store. This is handy for a variety of tasks, such as expressing
+ * asynchronous actions in a concise manner, or logging every action payload.
+ *
+ * See `redux-thunk` package as an example of the Redux middleware.
+ *
+ * Because middleware is potentially asynchronous, this should be the first
+ * store enhancer in the composition chain.
+ *
+ * Note that each middleware will be given the `dispatch` and `getState` functions
+ * as named arguments.
+ *
+ * @param {...Function} middlewares The middleware chain to be applied.
+ * @returns {Function} A store enhancer applying the middleware.
+ */
+export default function applyMiddleware(...middlewares) {
+  return (createStore) => (reducer, preloadedState, enhancer) => {
+    // 創建原生 store 來獲取除 dispatch 以外功能
+    const store = createStore(reducer, preloadedState, enhancer)
+    let dispatch = store.dispatch
+    let chain = []
+
+    const middlewareAPI = {
+      getState: store.getState,
+      dispatch: (action) => dispatch(action)
+    }
+    /* 
+    * 這裡會把 middleware 的第一個參數解掉, 
+    * 通常會是 ({getState, dispatch}) => (next) => (action) => {...} 的型態,
+    * 這裡就會把 middlewareAPI 代入({getState, dispatch})
+    */
+    chain = middlewares.map(middleware => middleware(middlewareAPI))
+    /* 在原生 dispatch 方法外加了 middleware 層, 很像express的middleware
+    * compose(ninjaMiddle, hunterMiddle) 會變成 
+    * (...arg) => ninjaMiddle( hunterMiddle ( ...arg ) )
+    *
+    * compose(ninjaMiddle, hunterMiddle)(store.dispatch) 就是 
+    * ninjaMiddle( hunterMiddle (store.dispatch) )
+    * 而來到這的 middleware 的第一層參數已經被解掉只剩下 next => action => {...}
+    * 所以 store.dispatch 會被當成 next 傳到"最後一個 middleware"裡,
+    * 而每一個 middleware 中的 next 則是下一個 middleware 的 dispatch 部分
+    */
+    dispatch = compose(...chain)(store.dispatch)
+
+    return {
+      ...store,
+      dispatch
+    }
+  }
+}
+
+```
+
+</div>
+
+### 2-6. compose
+compose 負責組合同類型的函式, 原理很簡單, 使用 reduce 將函式遞迴的疊加而已 ,每個 function 都預期會接收一個參數, 它的回傳值將會作為在它左邊的 function 的變數, compose(ninja, hunter)就會是 hunter 的回傳值會被當成參數傳入 ninja 裡 => ninja(hunter(...arg))
+
+<div className="code">
+
+```javascript
+
+/**
+ * Composes single-argument functions from right to left. The rightmost
+ * function can take multiple arguments as it provides the signature for
+ * the resulting composite function.
+ *
+ * @param {...Function} funcs The functions to compose.
+ * @returns {Function} A function obtained by composing the argument functions
+ * from right to left. For example, compose(f, g, h) is identical to doing
+ * (...args) => f(g(h(...args))).
+ */
+
+export default function compose(...funcs) {
+  if (funcs.length === 0) {
+    return arg => arg
+  }
+
+  if (funcs.length === 1) {
+    return funcs[0]
+  }
+
+  return funcs.reduce((a, b) => (...args) => a(b(...args)))
+}
+
+```
+
+</div>
+
+2-7. middleware
+
+* Redux-thunk
+
+<div className="code">
+
+```javascript
+function createThunkMiddleware(extraArgument) {
+  return ({ dispatch, getState }) => (next) => (action) => {
+    if (typeof action === 'function') {
+      return action(dispatch, getState, extraArgument);
+    }
+
+    return next(action);
+  };
+}
+
+const thunk = createThunkMiddleware();
+thunk.withExtraArgument = createThunkMiddleware;
+
+export default thunk;
+
+```
+
+</div>
+
+* Redux-promise
+
+<div className="code">
+
+```javascript
+
+import isPromise from 'is-promise';
+import { isFSA } from 'flux-standard-action';
+
+export default function promiseMiddleware({ dispatch }) {
+  return next => action => {
+    if (!isFSA(action)) {
+      return isPromise(action) ? action.then(dispatch) : next(action);
+    }
+
+    return isPromise(action.payload)
+      ? action.payload
+          .then(result => dispatch({ ...action, payload: result }))
+          .catch(error => {
+            dispatch({ ...action, payload: error, error: true });
+            return Promise.reject(error);
+          })
+      : next(action);
+  };
+}
+
+```
+
+</div>
